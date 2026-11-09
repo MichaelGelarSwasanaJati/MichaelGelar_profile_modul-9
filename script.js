@@ -72,22 +72,47 @@ const daftarKomentar = document.querySelector("#daftar-komentar");
 const pesanError = document.querySelector("#pesan-error");
 const btnHapusSemua = document.querySelector("#btn-hapus-semua");
 
-formKomentar.addEventListener("submit", (e) => {
+// Modul 9 Bagian B.2 (Langkah 1: Panggil di Listener submit)
+formKomentar.addEventListener("submit", async (e) => {
   e.preventDefault();
   const nama = inputNama.value.trim();
   const pesan = inputPesan.value.trim();
+  
   if (nama === "" || pesan.length < 5) {
     pesanError.textContent = "Nama wajib diisi dan komentar minimal 5 karakter!";
     pesanError.style.display = "block";
     return;
   }
   pesanError.style.display = "none";
-  
-  // Simpan ke localStorage dan render ulang daftar komentar
-  simpanKomentar(nama, pesan);
-  muatKomentar();
-  
-  formKomentar.reset();
+
+  // Memanggil fungsi POST ke server (untuk menggantikan simpanKomentar localStorage)
+  try {
+    const hasil = await kirimKomentarKeServer(nama, pesan);
+    console.log("Komentar tersimpan di server, id:", hasil.id);
+    
+    // Modul 9 Bagian B.3 (Langkah 2: Tampilkan respons POST (id))
+    const itemKomentar = document.createElement("li");
+    itemKomentar.textContent = `${hasil.name}: ${hasil.body}`;
+    itemKomentar.dataset.id = hasil.id; // simpan id dari server (untuk update/delete)
+
+    // Menambahkan tombol Like
+    const tombolLike = document.createElement("button");
+    tombolLike.textContent = "Like (0)"; 
+    tombolLike.dataset.likes = 0; // Menyimpan jumlah like awal
+    itemKomentar.appendChild(tombolLike);
+
+    // Modul 9 Bagian B.5 - (Langkah 4 (1): Menambahkan tombol hapus)
+    const tombolHapus = document.createElement("button");
+    tombolHapus.textContent = "Hapus";
+    itemKomentar.appendChild(tombolHapus);
+
+    daftarKomentar.appendChild(itemKomentar);
+
+    formKomentar.reset();
+  } catch (error) {
+    alert("Gagal mengirim komentar, silakan coba lagi.");
+    console.error(error);
+  }
 });
 
 daftarKomentar.addEventListener("click", (e) => {
@@ -199,9 +224,8 @@ function muatKomentar() {
 // Panggil fungsi muat komentar saat script dijalankan
 muatKomentar();
 
-/* =========================================================
-    MODUL 7 — Tombol Reset Seluruh Data Tersimpan
-   ========================================================= */
+    // MODUL 7 — Tombol Reset Seluruh Data tersimpan
+
 const tombolReset = document.querySelector("#btn-reset");
 if (tombolReset) {
   tombolReset.addEventListener("click", () => {
@@ -211,4 +235,140 @@ if (tombolReset) {
       location.reload();    // Memuat ulang halaman agar kembali ke kondisi awal
     }
   });
+}
+
+// MODUL 8: FETCH API & JSON
+const containerArtikel = document.querySelector("#container-artikel");
+
+async function muatArtikelDariAPI() {
+  const loading = document.querySelector("#loading");
+  if (loading) loading.style.display = "block"; // Tampilkan loading
+
+  try {
+    const response = await fetch("https://jsonplaceholder.typicode.com/posts?_limit=5");
+    
+    // Periksa apakah respons HTTP berhasil
+    if (!response.ok) {
+      throw new Error("Status: " + response.status);
+    }
+    
+    const daftarPost = await response.json();
+    
+    if (containerArtikel) {
+      containerArtikel.innerHTML = ""; // untuk membersihkan kontainer sebelum menambahkan artikel baru
+      daftarPost.forEach((post) => {
+        const article = document.createElement("article");
+        
+        const judul = document.createElement("h3");
+        judul.textContent = post.title;
+        
+        const isi = document.createElement("p");
+        isi.textContent = post.body;
+        
+        article.appendChild(judul);
+        article.appendChild(isi);
+        containerArtikel.appendChild(article);
+      });
+    }
+
+  } catch (error) {
+    if (containerArtikel) {
+      containerArtikel.innerHTML = "<p>Gagal memuat artikel, silakan coba lagi nanti.</p>";
+    }
+    console.error("Gagal mengambil data:", error);
+  } finally {
+    if (loading) loading.style.display = "none"; // untuk menyembunyikan loading
+  }
+}
+
+// menjalankan fungsi muatArtikelDariAPI saat halaman dimuat
+muatArtikelDariAPI();
+
+// MODUL 8: Data Pengguna untuk Aside
+async function muatProfilPenulis() {
+  try {
+    const response = await fetch("https://jsonplaceholder.typicode.com/users/1");
+    if (!response.ok) throw new Error("Status: " + response.status);
+    
+    const user = await response.json();
+    document.querySelector("#nama-penulis").textContent = user.name;
+    document.querySelector("#email-penulis").textContent = user.email;
+  } catch (error) {
+    console.error("Gagal memuat profil penulis:", error);
+  }
+}
+
+muatProfilPenulis();
+
+// Modul 9 Bagian B.2  (Langkah 1: Kirim Komentar (POST))
+async function kirimKomentarKeServer(nama, pesan) {
+  const response = await fetch(
+    "https://jsonplaceholder.typicode.com/comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: nama, body: pesan, postId: 1 }),
+    });
+    
+  if (!response.ok) {
+    throw new Error("Gagal mengirim komentar, status: " + response.status);
+  }
+  return await response.json();
+}
+
+// Modul 9 Bagian B.4 (Langkah 3: Perbarui like (PATCH))
+async function perbaruiLikeKeServer(postId, jumlahLike) {
+  try {
+    const response = await fetch(
+      `https://jsonplaceholder.typicode.com/posts/${postId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ likes: jumlahLike }),
+      });
+    if (!response.ok) throw new Error("Status: " + response.status);
+    console.log("Like berhasil diperbarui di server");
+  } catch (error) {
+    console.error("Gagal memperbarui like:", error);
+  }
+}
+
+// Modul 9 Bagian B.5 (Langkah 4 & Update Like)
+daftarKomentar.addEventListener("click", async (e) => {
+  // jika tombol HAPUS diklik
+  if (e.target.tagName === "BUTTON" && e.target.textContent === "Hapus") {
+    const li = e.target.closest("li");
+    const id = li.dataset.id;
+    try {
+      const response = await fetch(
+        `https://jsonplaceholder.typicode.com/comments/${id}`, {
+          method: "DELETE",
+        });
+      if (!response.ok) throw new Error(response.status);
+      li.remove(); 
+    } catch (error) {
+      const statusError = parseInt(error.message);
+      alert("Gagal menghapus komentar dari server: " + pesanDariStatus(statusError));
+    }
+  }
+
+  // jika tombol LIKE diklik
+  if (e.target.tagName === "BUTTON" && e.target.textContent.startsWith("Like")) {
+    const li = e.target.closest("li");
+    const id = li.dataset.id;
+    
+    // Tambah angka like di tampilan web
+    let jumlahLike = parseInt(e.target.dataset.likes || 0) + 1;
+    e.target.dataset.likes = jumlahLike;
+    e.target.textContent = `Like (${jumlahLike})`;
+
+    // Modul 9 Bagian B.4 (Panggil fungsi Langkah 3 (PATCH) ke server)
+    perbaruiLikeKeServer(id, jumlahLike);
+  }
+});
+
+// Modul 9 Bagian B.6 (Langkah 5: Menangani status code)
+function pesanDariStatus(status) {
+  if (status === 404) return "Data tidak ditemukan di server.";
+  if (status === 400) return "Data yang dikirim tidak valid.";
+  if (status >= 500) return "Server sedang bermasalah, coba lagi nanti.";
+  return "Terjadi kesalahan tidak terduga.";
 }
